@@ -1,0 +1,134 @@
+/*
+ * mini_project2.c
+ *
+ *  Created on: Sep 16, 2022
+ *      Author: SHAHD MOHAMED
+ */
+
+#include<avr/io.h>
+#include<avr/interrupt.h>
+#include<util/delay.h>
+#include "Types.h"
+
+#define Comparematch 15625
+
+unit8 g_seconds=0;
+unit8 g_minutes=0;
+unit8 g_hours=0;
+
+
+unit8 FirstDigit (unit8 num)
+{
+	return (num%10);
+}
+
+unit8 SecondDigit (unit8 num)
+{
+	num=num/10;
+	return (num % 10);
+}
+
+
+
+
+void TIMER1_Init(void)
+{
+	TCNT1=0;
+	OCR1A= Comparematch;
+	TCCR1B = (1<<CS10) | (1<<CS11) | (1<< WGM12) ;// F_CPU/64, CTC mode
+	TIMSK |= (1<<OCIE1A); // enable interrupt for Compare A match
+}
+
+
+
+void INT0_Init(void)
+{
+	MCUCR |= (1<<ISC01); // INT0 works with falling edge
+	GICR |= (1<<INT0); // enable external interrupt signal for INT0
+}
+
+void INT1_Init(void)
+{
+	MCUCR |= (1<<ISC11) | (1<<ISC10); //INT1 works with rising edge
+	GICR |= (1<<INT1); // enable external interrupt signal for INT1
+}
+
+void INT2_Init (void)
+{
+	GICR |= (1<<INT2); // enable external interrupt signal for INT2
+	MCUCSR &= ~(1<<ISC2); // INT2 works with the falling edge
+}
+
+ISR (TIMER1_COMPA_vect)
+{
+	g_seconds++;
+}
+
+ISR (INT0_vect) //reset stopwatch
+{
+	g_seconds=0;
+	g_minutes=0;
+	g_hours=0;
+
+	TCNT1=0; /* timer starts counting from begining */
+}
+
+ISR (INT1_vect) // pause stopwatch
+{
+	TCCR1B=0; //stop timer
+}
+
+ISR (INT2_vect) //resume stopwatch
+{
+	TCCR1B = (1<<CS10) | (1<<CS11) | (1<< WGM12) ;// resume counting
+}
+
+int main (void)
+{
+	DDRC |= 0x0F; // four output pins for decoder
+	DDRA |= 0x3F; // set first six pins as output pins as enable/disable for 6 7-segments
+	PORTA |= 0x3F; // all segments are off at the begining
+	DDRD &= ~(1<<PD2); // input pin for INT0
+	PORTD |= (1<<PD2); // activate internal pull-up resistor at PD2
+	DDRD &= ~(1<<PD3); //input pin for INT1
+	DDRB &= ~(1<<PB2); //input pin for INT2
+	PORTB |= (1<<PB2); // activate internal pull-up resistor at PB2
+	sei(); //enable global interrupt
+
+	INT0_Init();   //activate INT0
+	INT1_Init();   //activate INT1
+	INT2_Init();   //activate INT2
+	TIMER1_Init(); //activate TIMER1
+
+	for( ; ; )
+	{
+
+		/* Activate first 7-segment */
+		PORTA = (PORTA | 0x3F) & 0xFE;
+		PORTC = (PORTC & 0xF0) | ( FirstDigit(g_seconds));
+		_delay_us(200);
+		/* Activate second 7-segment */
+		PORTA = (PORTA | 0x3F) & 0xFD;
+		PORTC = (PORTC & 0xF0) | ( SecondDigit(g_seconds));
+		_delay_us(200);
+		/* Activate third 7-segment */
+		PORTA = (PORTA | 0x3F) & 0xFB;
+		PORTC = (PORTC & 0xF0) | ( FirstDigit (g_minutes) );
+		_delay_us(200);
+		/* Activate fourth 7-segment */
+		PORTA = (PORTA | 0x3F) & 0xF7;
+		PORTC = (PORTC & 0xF0) | ( SecondDigit(g_minutes));
+		_delay_us(200);
+		/* Activate fifth 7-segment */
+		PORTA = (PORTA | 0x3F) & 0xEF;
+		PORTC = (PORTC & 0xF0) | ( FirstDigit(g_hours) );
+		_delay_us(200);
+		/* Activate sixth 7-segment */
+		PORTA = (PORTA | 0x3F) & 0xDF;
+		PORTC = (PORTC & 0xF0) | ( SecondDigit(g_hours) );
+		_delay_us(200);
+
+	}
+
+
+}
